@@ -1,6 +1,6 @@
 blueprint:
   name: Motion-activated Light
-  description: Turn on a light when motion is detected.
+  description: Turn on a light when motion is detected. Supports sunset and sunrise handling.
   domain: automation
   source_url: https://github.com/j-be/homeassistant/blob/main/blueprints/motion-activated-light.yaml
   author: j-be@github
@@ -29,6 +29,42 @@ blueprint:
           min: 0
           max: 3600
           unit_of_measurement: seconds
+    sunset_start_hh:
+      name: "Pre-sunset hours activation"
+      description: "How many hours before sunset does the management activate (negative numbers indicate a delay)?"
+      selector:
+        number:
+          min: 0
+          max: 12
+          unit_of_measurement: hours
+      default: 0
+    sunset_start_mm:
+      name: "Pre-sunset minutes activation"
+      description: "How many minutes before sunset does the management activate (negative numbers indicate a delay)?"
+      selector:
+        number:
+          min: 0
+          max: 59
+          unit_of_measurement: minutes
+      default: 0
+    sunrise_start_hh:
+      name: "Post-sunrise hours activation"
+      description: "How many hours after sunrise does the management deactivate (negative numbers indicate an advance)?"
+      selector:
+        number:
+          min: 0
+          max: 12
+          unit_of_measurement: hours
+      default: 0
+    sunrise_start_mm:
+      name: "Post-sunrise minutes activation"
+      description: "How many minutes after sunrise does the management deactivate (negative numbers indicate an advance)?"
+      selector:
+        number:
+          min: 0
+          max: 59
+          unit_of_measurement: minutes
+      default: 0
 
 # If motion is detected within the delay,
 # we restart the script.
@@ -40,6 +76,30 @@ triggers:
   entity_id: !input motion_entity
   from: "off"
   to: "on"
+
+variables:
+  dusk_start_hour: !input sunset_start_hh
+  dusk_start_minute: !input sunset_start_mm
+  rising_start_hour: !input sunrise_start_hh
+  rising_start_minute: !input sunrise_start_mm
+  sun_rising: >
+    {% if (states.sun.sun.state == "above_horizon") %}
+        {{ states.sun.sun.last_changed }}
+    {%- else -%}
+        {{ states.sun.sun.attributes.next_rising }}
+    {%- endif %}
+  sun_dusk: >
+    {% if (states.sun.sun.state == "above_horizon") %}
+        {{ states.sun.sun.attributes.next_dusk }}
+    {%- else -%}
+        {{ states.sun.sun.last_changed }}
+    {%- endif %}
+
+condition:
+  - condition: and
+    conditions:
+      -  "{{ as_timestamp(now()) >= ((as_timestamp(sun_dusk) - dusk_start_hour*3600 - dusk_start_minute*60) )}}"
+      -  "{{ as_timestamp(now()) < ((as_timestamp(sun_rising) + rising_start_hour*3600 + rising_start_minute*60) )}}"
 
 actions:
   - alias: "Turn on the light"
